@@ -38,6 +38,10 @@ let ctrlArmed = false;
 let lastSeen = 0;
 let shellExited = false;
 let selecting = false;
+let reconnectTimer = 0;
+let reconnectDelay = 1000;
+let reconnecting = false;
+let shuttingDown = false;
 
 const SLOT_MAX = 4;
 
@@ -248,7 +252,42 @@ function scheduleFit() {
   });
 }
 
+function scheduleReconnect() {
+  if (shuttingDown || reconnectTimer) return;
+  setStatus("连接已断开，正在重连…", "wait");
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = 0;
+    void attemptReconnect();
+  }, reconnectDelay);
+  reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+}
+
+async function attemptReconnect() {
+  if (reconnecting || shuttingDown) return;
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+  reconnecting = true;
+  try {
+    const response = await fetch(`/ping?token=${encodeURIComponent(token)}`, { cache: "no-store" });
+    if (response.status === 401) {
+      setStatus("token 已失效，请用新链接打开", "bad");
+      reconnecting = false;
+      return;
+    }
+    if (!response.ok) throw new Error("ping failed");
+  } catch {
+    reconnecting = false;
+    scheduleReconnect();
+    return;
+  }
+  reconnecting = false;
+  connect();
+}
+
 function connect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = 0;
+  }
   if (ws) {
     ws.onclose = null;
     ws.onmessage = null;
@@ -267,6 +306,7 @@ function connect() {
   ws.binaryType = "arraybuffer";
   ws.onopen = () => {
     lastSeen = Date.now();
+    reconnectDelay = 1000;
     shellExited = false;
     setStatus("已连接", "ok");
     els.reconnect.hidden = true;
@@ -287,6 +327,7 @@ function connect() {
     els.panel.hidden = true;
     if (!shellExited) setStatus("连接已断开", "bad");
     els.reconnect.hidden = false;
+    scheduleReconnect();
   };
   ws.onerror = () => {};
 }
@@ -487,10 +528,27 @@ setInterval(() => {
 }, 20000);
 
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && ws && ws.readyState === WebSocket.OPEN) {
-    lastSeen = Date.now();
+  if (document.visibilityState !== "visible") return;
+  lastSeen = Date.now();
+  if (ws && ws.readyState === WebSocket.OPEN) {
     send({ type: "ping" });
+    return;
   }
+  if (reconnecting || shuttingDown) return;
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = 0;
+  }
+  reconnectDelay = 1000;
+  void attemptReconnect();
+});
+
+window.addEventListener("pagehide", () => {
+  shuttingDown = true;
+});
+
+window.addEventListener("pageshow", () => {
+  shuttingDown = false;
 });
 
 new ResizeObserver(scheduleFit).observe(els.term);
