@@ -17,7 +17,7 @@ WebSocket 连接本身不拥有 shell，只“挂”在某个槽位上。断线�
 
 ## 认证
 
-- 启动时 `secrets.token_urlsafe(24)` 生成 token；`--token` 可覆盖。
+- 启动时 `secrets.token_urlsafe(24)` 生成 token；`--token` 可覆盖，但只在 `--no-tunnel` 下。
 - 校验用 `hmac.compare_digest`，只接受查询参数 `?token=`。
 - 页面首屏是静态资源，不含数据；`/ping` 用于在建立 WebSocket 前判断 token 是否还有效。
 - 前端拿到 token 后写入 `sessionStorage`，并用 `history.replaceState` 把它从地址栏去掉。
@@ -25,6 +25,24 @@ WebSocket 连接本身不拥有 shell，只“挂”在某个槽位上。断线�
 
 token 是进程级的，不是会话级的：同一个 token 可以开多个连接，各自得到独立的 shell。
 重启 webterm 即轮换 token；服务端不落盘保存 token。
+
+## 公网入口
+
+默认启动流程是先开隧道、再对外服务：`cloudflared tunnel --url http://127.0.0.1:<port>`
+在 Cloudflare 边缘注册一条快速隧道，只建立出站连接，因此不需要公网地址，也不需要在
+路由器上做端口映射。隧道地址是随机的，每次启动都不同。
+
+- 解析 URL 的正则排除了保留子域 `api.`，否则会拿到 `api.trycloudflare.com`，打开只有
+  `{"code":10005,"message":"Method Not Allowed"}`。
+- 固定用 `--protocol http2`：QUIC 走 UDP 7844，被运营商或企业网封掉时 cloudflared 仍能
+  注册成功，但手机端会看到 `error 1033`。
+- 启动 cloudflared 前会删掉环境里的 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 等变量。
+  shell 里的本地代理（Clash 之类）会被子进程继承，把隧道边缘连接绕进本地代理，表现同样
+  是 1033。
+- 二维码用的 `webterm/qr.py` 是自带实现：字节模式、纠错等级 M、版本 1–10（最多 213 字节），
+  掩码按 ISO/IEC 18004 的四条罚分规则评测。终端里用白色方块表示浅色模块、黑底空格表示
+  深色模块。
+- 隧道进程意外退出时服务一并停止（`App.stop()`），而不是留下一个没有公网入口的进程。
 
 ## 传输
 
@@ -122,7 +140,9 @@ xterm 6 只渲染可视区域，`.xterm-viewport` 的 `scrollHeight` 等于 `cli
 
 ## 已知取舍
 
-- 不提供 TLS：预期部署在 Tailscale 或其他私网内，由链路层负责加密。
+- 公网地址随进程变化，token 每次启动重新生成；没有固定域名，也没有凭据持久化。
+- 唯一入口是 Cloudflare 的随机域名，地址一旦泄露就等于暴露 shell，只能靠换 token 和
+  关进程收回。冷启动时新域名要几十秒才在全网解析出来。
 - 只回放最近 256 KB 输出；更早的内容不会保留。
 - 槽位没有关闭操作，`exit` 之后需要再点一次标签页才重启。
 - 没有多用户、没有会话管理界面；一个进程一个 token，够用为止。

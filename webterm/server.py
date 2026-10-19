@@ -46,23 +46,28 @@ class App:
         self.uploads = {}
         self.control = ControlServer(self)
         self._server = None
+        self._stop = None
         self.slot_count = SLOT_COUNT
 
     async def run(self):
         self.control.prepare()
         await self.control.start()
         self._server = await asyncio.start_server(self.handle, self.bind, self.port)
-        stop = asyncio.Event()
+        self._stop = asyncio.Event()
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
-                loop.add_signal_handler(sig, stop.set)
+                loop.add_signal_handler(sig, self.stop)
             except (ValueError, NotImplementedError):
                 pass
         try:
-            await stop.wait()
+            await self._stop.wait()
         finally:
             await self.shutdown()
+
+    def stop(self):
+        if self._stop is not None:
+            self._stop.set()
 
     def slot(self, number):
         slot = self.slots.get(number)
