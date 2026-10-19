@@ -201,6 +201,23 @@ els.term.addEventListener(
     touchY = point.clientY;
     const height = lineHeight();
     if (height <= 0) return;
+    if (term.buffer.active.type === "alternate") {
+      if (!term.element || Math.abs(touchDelta) < height * 1.5) return;
+      const direction = touchDelta > 0 ? -1 : 1;
+      touchDelta = 0;
+      term.element.dispatchEvent(
+        new WheelEvent("wheel", {
+          deltaY: direction * 120,
+          deltaMode: 0,
+          bubbles: true,
+          cancelable: true,
+          clientX: point.clientX,
+          clientY: point.clientY,
+        }),
+      );
+      event.preventDefault();
+      return;
+    }
     const lines = Math.trunc(touchDelta / height);
     if (lines === 0) return;
     touchDelta -= lines * height;
@@ -452,3 +469,4 @@ updateTabs();
 updateZoomButtons();
 fitTerminal();
 void boot();
+
