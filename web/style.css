@@ -162,6 +162,13 @@ button:disabled {
   padding: 0 12px;
 }
 
+body.selecting #term .xterm,
+body.selecting #term .xterm-screen,
+body.selecting #term .xterm-rows {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
 #upload {
   position: fixed;
   left: 8px;

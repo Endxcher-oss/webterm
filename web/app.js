@@ -37,6 +37,7 @@ let pendingUpload = null;
 let ctrlArmed = false;
 let lastSeen = 0;
 let shellExited = false;
+let selecting = false;
 
 const SLOT_MAX = 4;
 
@@ -170,6 +171,7 @@ function lineHeight() {
 els.term.addEventListener(
   "touchstart",
   (event) => {
+    if (selecting) return;
     if (event.touches.length !== 1) {
       touchY = null;
       return;
@@ -185,6 +187,7 @@ els.term.addEventListener(
 els.term.addEventListener(
   "touchmove",
   (event) => {
+    if (selecting) return;
     if (touchY === null || event.touches.length !== 1) return;
     const point = event.touches[0];
     const dy = point.clientY - touchY;
@@ -401,10 +404,40 @@ term.onData((data) => {
   send({ type: "input", data });
 });
 
+function setSelecting(state) {
+  selecting = state;
+  document.body.classList.toggle("selecting", selecting);
+  const button = els.keys.querySelector('[data-key="select"]');
+  if (button) {
+    button.classList.toggle("active", selecting);
+    button.textContent = selecting ? "完成" : "选择";
+  }
+  if (selecting) {
+    setStatus("长按选择文字，复制后点完成", "wait");
+  } else {
+    window.getSelection()?.removeAllRanges();
+    setStatus("已连接", "ok");
+  }
+}
+
+for (const type of ["mousedown", "touchstart", "touchmove", "contextmenu"]) {
+  els.term.addEventListener(
+    type,
+    (event) => {
+      if (selecting) event.stopImmediatePropagation();
+    },
+    true,
+  );
+}
+
 els.keys.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button) return;
   const key = button.dataset.key;
+  if (key === "select") {
+    setSelecting(!selecting);
+    return;
+  }
   if (key === "ctrl") {
     setCtrl(!ctrlArmed);
     term.focus();

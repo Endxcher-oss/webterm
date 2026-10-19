@@ -46,6 +46,11 @@ token 每个进程都不同，重启即失效。需要固定 token 时加 `--tok
 可以一次选多个文件。`upload` 只在 webterm 启动的 shell 里可用，它通过 webterm
 注入的 `WEBTERM_SOCK` 找到当前标签页；上传过程中切换标签页会取消这次请求。
 
+## 复制文字
+
+点键盘栏的「选择」，终端进入可选状态：长按文字选中，用系统菜单复制，再点「完成」
+回到滚动模式。
+
 ## 配色
 
 终端配色照搬 `~/.config/kitty/kitty.conf` 中的 Adwaita dark 主题：背景 `#1d1d1d`、

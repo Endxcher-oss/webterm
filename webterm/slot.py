@@ -68,8 +68,13 @@ class TerminalSlot:
         self._buffer.extend(data)
         if len(self._buffer) > REPLAY_LIMIT:
             cut = len(self._buffer) - REPLAY_LIMIT
-            newline = self._buffer.find(b"\n", cut)
-            cut = len(self._buffer) - REPLAY_LIMIT if newline < 0 else newline + 1
+            newline = self._buffer.find(b"\n", cut, cut + 4096)
+            if newline >= 0:
+                cut = newline + 1
+            else:
+                escape = self._buffer.find(b"\x1b", cut, cut + 4096)
+                if escape >= 0:
+                    cut = escape
             del self._buffer[:cut]
         for client in list(self._clients):
             client.push_binary(data)
