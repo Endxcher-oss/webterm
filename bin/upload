@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+# upload: ask the browser attached to this webterm shell to send files into a directory.
+
+import argparse
+import json
+import os
+import socket
+import sys
+
+
+def human(size):
+    value = float(size)
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+        if value < 1024 or unit == "TiB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+
+
+def fail(message, code=1):
+    print(f"upload: {message}", file=sys.stderr)
+    return code
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="upload",
+        description="让 webterm 客户端选择文件并传入这个目录。",
+    )
+    parser.add_argument("dest", nargs="?", default=None, help="目标目录（默认当前目录）")
+    parser.add_argument("-f", "--force", action="store_true", help="覆盖同名文件")
+    args = parser.parse_args(argv)
+
+    sock_path = os.environ.get("WEBTERM_SOCK")
+    session = os.environ.get("WEBTERM_SESSION")
+    if not sock_path or not session:
+        return fail("不在 webterm 会话中运行")
+
+    dest = os.path.abspath(args.dest or os.getcwd())
+    if not os.path.isdir(dest):
+        return fail(f"目标目录不存在: {dest}")
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(sock_path)
+    except OSError as exc:
+        sock.close()
+        return fail(f"连不上 webterm: {exc}")
+
+    request = {"session": session, "dest": dest, "overwrite": args.force}
+    try:
+        sock.sendall((json.dumps(request) + "\n").encode())
+    except OSError as exc:
+        sock.close()
+        return fail(f"请求发送失败: {exc}")
+
+    print(f"等待客户端上传到 {dest} …", flush=True)
+    buffer = b""
+    try:
+        while True:
+            chunk = sock.recv(65536)
+            if not chunk:
+                break
+            buffer += chunk
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                if not line.strip():
+                    continue
+                message = json.loads(line)
+                kind = message.get("type")
+                if kind == "file":
+                    print(f"  已接收 {message['name']} ({human(message['size'])})", flush=True)
+                elif kind == "done":
+                    errors = message.get("errors") or []
+                    print(f"完成: {len(message['files'])} 个文件, {human(message['bytes'])} -> {message['dest']}")
+                    for error in errors:
+                        print(f"  失败 {error.get('name')}: {error.get('message')}", file=sys.stderr)
+                    return 1 if errors else 0
+                elif kind == "error":
+                    return fail(message.get("message", "上传失败"))
+    except KeyboardInterrupt:
+        return fail("已中断", 130)
+    except (OSError, ValueError) as exc:
+        return fail(f"连接中断: {exc}")
+    finally:
+        sock.close()
+    return fail("连接已关闭")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

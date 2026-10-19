@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>webterm</title>
+  <link rel="stylesheet" href="/vendor/xterm.css">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main id="app">
+    <header id="bar">
+      <span id="dot"></span>
+      <span id="status">连接中…</span>
+      <button id="reconnect" type="button" hidden>重新连接</button>
+      <div id="tabs" role="tablist" aria-label="终端标签页">
+        <button type="button" data-slot="1">1</button>
+        <button type="button" data-slot="2">2</button>
+        <button type="button" data-slot="3">3</button>
+        <button type="button" data-slot="4">4</button>
+      </div>
+      <div id="zoom">
+        <button id="zoom-out" type="button" aria-label="缩小字体">A−</button>
+        <button id="zoom-in" type="button" aria-label="放大字体">A+</button>
+      </div>
+    </header>
+    <div id="term"></div>
+    <div id="keys">
+      <button type="button" data-key="esc">Esc</button>
+      <button type="button" data-key="tab">Tab</button>
+      <button type="button" data-key="ctrl">Ctrl</button>
+      <button type="button" data-key="left">←</button>
+      <button type="button" data-key="down">↓</button>
+      <button type="button" data-key="up">↑</button>
+      <button type="button" data-key="right">→</button>
+    </div>
+    <section id="upload" hidden>
+      <p id="upload-dest"></p>
+      <p id="upload-progress"></p>
+      <div class="actions">
+        <button id="upload-pick" type="button">选择文件</button>
+        <button id="upload-cancel" type="button" class="ghost">取消</button>
+      </div>
+    </section>
+  </main>
+  <input id="file-input" type="file" multiple hidden>
+  <script src="/vendor/xterm.js"></script>
+  <script src="/vendor/addon-fit.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

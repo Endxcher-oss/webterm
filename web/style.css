@@ -1,0 +1,199 @@
+/* Layout for the terminal page: header, xterm surface, key bar, upload sheet. */
+
+:root {
+  --bg: #1d1d1d;
+  --fg: #deddda;
+  --bar: #242424;
+  --line: #303030;
+  --muted: #b0afac;
+  --accent: #62a0ea;
+  --ok: #57e389;
+  --wait: #ffa348;
+  --bad: #ed333b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body {
+  font-family: ui-monospace, "DejaVu Sans Mono", monospace;
+  font-size: 13px;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+#bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  background: var(--bar);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+#dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+#dot[data-state="ok"] {
+  background: var(--ok);
+}
+
+#dot[data-state="wait"] {
+  background: var(--wait);
+}
+
+#dot[data-state="bad"] {
+  background: var(--bad);
+}
+
+#tabs {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+#tabs button {
+  min-width: 28px;
+  padding: 2px 6px;
+}
+
+#zoom {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+#zoom button {
+  min-width: 34px;
+  padding: 2px 8px;
+}
+
+#status {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+button {
+  font: inherit;
+  color: var(--fg);
+  background: #303030;
+  border: 1px solid #4f4f4f;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+button:active {
+  background: #4f4f4f;
+}
+
+button.active {
+  color: #1d1d1d;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button.ghost {
+  background: transparent;
+}
+
+button:disabled {
+  opacity: 0.5;
+}
+
+#term {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 8px 0;
+}
+
+#term .xterm {
+  height: 100%;
+}
+
+#term .xterm-viewport {
+  background: transparent !important;
+  scrollbar-width: none;
+}
+
+#term .xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+#keys {
+  display: flex;
+  gap: 6px;
+  flex: none;
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: var(--bar);
+  border-top: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+#keys button {
+  min-width: 44px;
+  min-height: 38px;
+  padding: 0 12px;
+}
+
+#upload {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: calc(52px + env(safe-area-inset-bottom));
+  z-index: 20;
+  padding: 12px;
+  background: var(--bar);
+  border: 1px solid #4f4f4f;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+#upload p {
+  margin: 0 0 8px;
+}
+
+#upload-dest {
+  color: var(--fg);
+  word-break: break-all;
+}
+
+#upload-progress {
+  color: var(--muted);
+}
+
+#upload .actions {
+  display: flex;
+  gap: 8px;
+}
+
+#upload .actions button {
+  flex: 1;
+  padding: 10px;
+}
