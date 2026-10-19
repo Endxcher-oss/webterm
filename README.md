@@ -8,12 +8,12 @@ WebSocket，没有第三方依赖。shell 以启动 webterm 的用户身份运�
 
 需要 Linux 和 Python 3.10+（在 3.14 上测试），不需要安装任何包。
 
-    python3 -m webterm --bind 100.77.124.114
+    python3 -m webterm --bind 100.x.y.z
 
 启动后打印一行带 token 的链接，在浏览器里打开它即可：
 
-    webterm  100.77.124.114:7681
-    open     http://100.77.124.114:7681/?token=...
+    webterm  100.x.y.z:7681
+    open     http://100.x.y.z:7681/?token=...
 
 token 每个进程都不同，重启即失效。需要固定 token 时加 `--token`。
 
