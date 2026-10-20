@@ -181,9 +181,6 @@ class App:
         await respond(writer, status, page.replace("<!--error-->", note), "text/html; charset=utf-8", extra)
 
     async def _login(self, request, writer):
-        if not self._same_origin(request):
-            await respond(writer, 403, "cross-origin request rejected")
-            return
         try:
             length = int(request.headers.get("content-length", ""))
         except ValueError:
