@@ -1,5 +1,5 @@
-# Command line entry point: options, access password, public tunnel, and the
-# startup banner with a scannable QR code.
+# Command line entry point: options, optional access password, public tunnel,
+# and the startup banner with a scannable QR code.
 
 import argparse
 import asyncio
@@ -11,6 +11,7 @@ from . import qr, tunnel
 from .server import App
 
 BANNER_NOTICE = "隧道随进程退出而关闭，重启后地址和密码都会变。"
+BANNER_NOTICE_OPEN = "隧道随进程退出而关闭，重启后地址会变；无密码，谁拿到链接谁就能进。"
 PASSWORD_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
 PASSWORD_GROUP = 4
 PASSWORD_GROUPS = 2
@@ -24,10 +25,14 @@ def make_password():
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="webterm",
-        description="Serve an interactive shell over HTTP behind a password login.",
+        description="Serve an interactive shell over HTTP, optionally behind a password login.",
     )
     parser.add_argument("--bind", default="127.0.0.1", help="address to listen on (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=7681, help="port to listen on (default: 7681)")
+    parser.add_argument("--auth",
+        action="store_true",
+        help="generate an access password and require the login page (default: no password)",
+    )
     parser.add_argument("--shell",
         default=os.environ.get("SHELL") or "/bin/bash",
         help="shell to run in each session (default: $SHELL)",
@@ -43,12 +48,16 @@ def build_parser():
     return parser
 
 
-def _banner(app, password, url):
+def _banner(app, url):
     print(f"webterm  {url}")
     if app.bind == "127.0.0.1" and url.startswith("http://"):
         print("         仅本机可访问（--no-tunnel）")
-    print(f"密码     {password}")
-    print(f"提示     {BANNER_NOTICE}" if url.startswith("https://") else "提示     密码重启后失效")
+    if app.password:
+        print(f"密码     {app.password}")
+        print(f"提示     {BANNER_NOTICE}" if url.startswith("https://") else "提示     密码重启后失效")
+    else:
+        print("访问     无密码（--auth 可开启）")
+        print(f"提示     {BANNER_NOTICE_OPEN}" if url.startswith("https://") else "提示     本机直接打开即可")
     print()
     print(qr.to_terminal(url), flush=True)
 
@@ -68,7 +77,7 @@ async def _serve(app, public):
             url = f"{instance.url}/"
         else:
             url = f"http://{app.bind}:{app.port}/"
-        _banner(app, app.password, url)
+        _banner(app, url)
         watcher = asyncio.create_task(_watch_tunnel(instance, app)) if instance else None
         await app.run()
     except tunnel.TunnelError as exc:
@@ -91,7 +100,7 @@ def main(argv=None):
     app = App(
         bind=args.bind,
         port=args.port,
-        password=make_password(),
+        password=make_password() if args.auth else None,
         shell=args.shell,
         cwd=cwd,
     )

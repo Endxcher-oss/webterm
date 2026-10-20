@@ -1,4 +1,5 @@
-# HTTP and WebSocket front end: password login, sessions, routing and static files.
+# HTTP and WebSocket front end: optional password login, sessions, routing and
+# static files.
 
 import asyncio
 import base64
@@ -181,6 +182,9 @@ class App:
         await respond(writer, status, page.replace("<!--error-->", note), "text/html; charset=utf-8", extra)
 
     async def _login(self, request, writer):
+        if self.password is None:
+            await respond(writer, 303, b"", extra={"Location": "/"})
+            return
         try:
             length = int(request.headers.get("content-length", ""))
         except ValueError:
@@ -267,6 +271,8 @@ class App:
         await json_response(writer, 200, {"name": name, "size": size})
 
     def _authorized(self, request):
+        if self.password is None:
+            return True
         return self._valid_cookie(request.cookies.get(COOKIE_NAME))
 
     def _cookie(self, request):
