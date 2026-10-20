@@ -7,9 +7,10 @@ import hmac
 import os
 import secrets
 import signal
+import sys
 import time
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 from .control import ControlServer
 from .http import read_request, respond, json_response
@@ -295,7 +296,13 @@ class App:
         origin = request.headers.get("origin")
         if not origin:
             return True
-        host = request.headers.get("host")
-        if not host:
-            return False
-        return origin in (f"http://{host}", f"https://{host}")
+        host = request.headers.get("host", "")
+        origin_host = urlsplit(origin).hostname
+        if origin_host and origin_host == urlsplit(f"//{host}").hostname:
+            return True
+        print(
+            f"origin mismatch: origin={origin!r} host={host!r} path={request.path}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return False

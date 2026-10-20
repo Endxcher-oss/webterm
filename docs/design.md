@@ -24,8 +24,9 @@ WebSocket 连接本身不拥有 shell，只“挂”在某个槽位上。断线�
   所有 cookie 自动失效，不需要维护吊销列表。
 - cookie 带 `HttpOnly`、`SameSite=Strict`、30 天有效期；只有请求带 `cf-visitor`
   （说明是 Cloudflare 边缘转发来的）时才加 `Secure`，否则本机 http 访问收不到 cookie。
-- `/ping`、`/ws`、`/upload` 都只认这个 cookie；WebSocket 与 `/upload` 仍检查 `Origin`，
-  跨源请求一律拒绝。
+- `/ping`、`/ws`、`/upload` 都只认这个 cookie；登录、WebSocket 与 `/upload` 仍检查
+  `Origin`：带了 Origin 就必须与 `Host` 同主机名，端口和协议不比（隧道、反代会改写这两个
+  维度，主机名才是真正的信任边界）。不匹配的请求记为一行 `origin mismatch` 到 stderr。
 - 密码是进程级的，不是会话级的：同一个密码可以在多台设备上分别登录，各自拿到独立 cookie。
 
 ## 公网入口
