@@ -5,29 +5,28 @@ WebSocket，没有第三方依赖。shell 以启动 webterm 的用户身份运�
 
 ## 运行
 
-需要 Linux、Python 3.10+（在 3.14 上测试）和 [cloudflared]，不需要安装任何 Python 包。
-先进入项目根目录，再启动：
+需要 Linux 和 Python 3.10+（在 3.14 上测试），不需要安装任何 Python 包。先进入项目根
+目录，再启动：
 
     ~/webterm/start.sh
 
-启动后打印一个公网地址和二维码，任何网络都能访问：
+启动后打印监听地址，用浏览器打开即可：
 
-    webterm  https://random-words-here.trycloudflare.com/
+    webterm  http://127.0.0.1:7681/
     访问     无密码（--auth 可开启）
-    提示     隧道随进程退出而关闭，重启后地址会变；无密码，谁拿到链接谁就能进。
-    <二维码>
+    提示     本机直接打开即可
 
-打开地址直接进终端，不需要登录。加上 `--auth` 会先生成一个 8 位密码并要求登录，之后
-这台设备用 cookie 记住，不再重复验证：
+默认只监听 `127.0.0.1`，不对外开放。要手机或外网访问，用 `~/portal` 把它发布出去：
 
-    webterm  https://random-words-here.trycloudflare.com/
+    cd ~/portal
+    python3 -m portal --port 7681
+
+加上 `--auth` 会先生成一个 8 位密码并要求登录，之后这台设备用 cookie 记住，不再重复
+验证：
+
+    webterm  http://127.0.0.1:7681/
     密码     abcd-efgh
-
-[cloudflared]: https://github.com/cloudflare/cloudflared
-
-地址由 Cloudflare 随机分配，每次启动都不同，进程退出即失效；启用 `--auth` 时密码也
-每次重新生成，重启后旧的会话全部作废。冷启动时域名可能要用几十秒才解析出来，手机打
-不开就稍等再试。
+    提示     密码重启后失效
 
 参数原样传给 webterm，例如 `~/webterm/start.sh --port 9000`。
 
@@ -43,17 +42,16 @@ WebSocket，没有第三方依赖。shell 以启动 webterm 的用户身份运�
 | `--bind ADDR` | 监听地址，默认 `127.0.0.1` |
 | `--port N` | 监听端口，默认 `7681` |
 | `--auth` | 生成访问密码并要求登录，默认无密码 |
-| `--no-tunnel` | 不开公网隧道，只在 `--bind` 上监听 |
 | `--shell PATH` | 每个标签页运行的 shell，默认 `$SHELL` |
 | `--cwd DIR` | 新会话的初始目录，默认 `$HOME` |
 
-`--no-tunnel` 用于本机或已经处在私网链路上时的访问，此时 `--bind` 决定谁能连上来。
-默认没有密码，谁能连上端口或拿到公网链接谁就能进；公网使用时建议加 --auth。
+`--bind` 决定谁能连上来。默认没有密码，谁能连到端口谁就能进；要发到公网又不想加
+`--auth`，靠 portal 的 token 把门。
 
 顶部有 1–4 四个标签页，每个对应一个常驻 shell。默认只启动 1 号，点其他数字才启动。
 浏览器关掉、切后台或断网后 shell 继续运行，重新连接会回到原来的标签页，并回放最近
 约 256 KB 的输出。连接断开后页面会自动重连（退避间隔最长 10 秒）；启用 --auth 时会话失效
-后停止重试并回到登录页。按 Ctrl-C 停止服务，隧道同时关闭。
+后停止重试并回到登录页。按 Ctrl-C 停止服务。
 
 ## 上传文件
 
@@ -79,15 +77,16 @@ WebSocket，没有第三方依赖。shell 以启动 webterm 的用户身份运�
 
 ## 结构
 
-    webterm/          服务端包：HTTP、WebSocket、PTY、上传控制、隧道、二维码
+    webterm/          服务端包：HTTP、WebSocket、PTY、上传控制
     web/              前端：页面、xterm.js、配色
     bin/upload        上传客户端
     docs/             设计与协议说明
 
 ## 限制
 
-- 默认没有密码，拿到链接的人可以直接操作 shell；公网使用时建议加 --auth。
+- 默认没有密码，能连到端口的人可以直接操作 shell；发到公网时要么加 --auth，要么只靠
+  portal 的链接把门。
 - 启用 --auth 时密码只有一个，不区分用户；拿到密码就等于拿到该用户的 shell。
-- 公网地址每次启动都换，密码（启用时）也是，进程退出即失效。
+- 密码（启用时）每次启动重新生成，进程退出即失效；webterm 自己不提供公网入口。
 - 断线重连只回放最近约 256 KB 输出；更早的历史不保留。
 - 标签页不能单独关闭；在 shell 里 `exit` 后，再点该数字会重新启动它。
