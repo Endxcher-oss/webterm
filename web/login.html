@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex">
+  <title>webterm 登录</title>
+  <style>
+    :root {
+      --bg: #1d1d1d;
+      --fg: #deddda;
+      --panel: #242424;
+      --line: #303030;
+      --muted: #b0afac;
+      --accent: #62a0ea;
+      --bad: #ed333b;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: ui-monospace, "DejaVu Sans Mono", monospace;
+      font-size: 14px;
+    }
+    main {
+      width: 100%;
+      max-width: 320px;
+    }
+    h1 {
+      margin: 0 0 24px;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--fg);
+      font: inherit;
+      letter-spacing: 0.12em;
+    }
+    input:focus {
+      border-color: var(--accent);
+      outline: none;
+    }
+    button {
+      width: 100%;
+      margin-top: 16px;
+      padding: 10px 12px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #161616;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .error {
+      margin: 0 0 16px;
+      color: var(--bad);
+      font-size: 12px;
+    }
+    .hint {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>WEBTERM</h1>
+    <!--error-->
+    <form method="post" action="/login">
+      <label for="password">访问密码</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" autofocus required>
+      <button type="submit">进入</button>
+    </form>
+    <p class="hint">密码在启动 webterm 的终端里，每次重启都会更换。</p>
+  </main>
+</body>
+</html>

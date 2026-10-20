@@ -7,6 +7,7 @@ from urllib.parse import parse_qs
 REASONS = {
     200: "OK",
     204: "No Content",
+    303: "See Other",
     400: "Bad Request",
     401: "Unauthorized",
     403: "Forbidden",
@@ -27,6 +28,11 @@ class Request:
         self.reader = reader
         self.path, _, query = target.partition("?")
         self.query = parse_qs(query, keep_blank_values=True)
+        self.cookies = {}
+        for part in headers.get("cookie", "").split(";"):
+            name, _, value = part.strip().partition("=")
+            if name:
+                self.cookies[name] = value
 
     def get(self, name, default=""):
         values = self.query.get(name)

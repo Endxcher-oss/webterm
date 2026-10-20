@@ -1,10 +1,15 @@
-# HTTP and WebSocket front end: routing, token checks, sessions and static files.
+# HTTP and WebSocket front end: password login, sessions, routing and static files.
 
 import asyncio
+import base64
+import hashlib
 import hmac
 import os
+import secrets
 import signal
+import time
 from pathlib import Path
+from urllib.parse import parse_qs
 
 from .control import ControlServer
 from .http import read_request, respond, json_response
@@ -16,6 +21,9 @@ from .ws import WebSocket, accept_key
 WEB_ROOT = Path(__file__).resolve().parent.parent / "web"
 BIN_DIR = Path(__file__).resolve().parent.parent / "bin"
 SLOT_COUNT = 4
+COOKIE_NAME = "webterm_session"
+SESSION_TTL = 30 * 24 * 3600
+MAX_FORM = 4096
 
 STATIC = {
     "/": ("index.html", "text/html; charset=utf-8"),
@@ -32,12 +40,20 @@ CSP = (
     "img-src 'self' data:; connect-src 'self' ws: wss:; base-uri 'none'; form-action 'none'"
 )
 
+CSP_LOGIN = (
+    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; "
+    "base-uri 'none'; frame-ancestors 'none'"
+)
+
+LOGIN_ERROR = "密码不正确，请重试。"
+
 
 class App:
-    def __init__(self, bind, port, token, shell, cwd, environ=None):
+    def __init__(self, bind, port, password, shell, cwd, environ=None):
         self.bind = bind
         self.port = port
-        self.token = token
+        self.password = password
+        self.secret = secrets.token_bytes(32)
         self.shell = shell
         self.cwd = cwd
         self.env = dict(environ if environ is not None else os.environ)
@@ -106,6 +122,8 @@ class App:
                 await self._websocket(request, writer)
             elif request.method == "GET" and request.path == "/ping":
                 await respond(writer, 204 if self._authorized(request) else 401)
+            elif request.method == "POST" and request.path == "/login":
+                await self._login(request, writer)
             elif request.method == "POST" and request.path == "/upload":
                 await self._upload(request, writer)
             elif request.method == "GET":
@@ -126,21 +144,71 @@ class App:
         if request.path == "/favicon.ico":
             await respond(writer, 204)
             return
+        if request.path == "/":
+            if self._authorized(request):
+                await self._file(writer, "index.html", "text/html; charset=utf-8", "no-cache", CSP)
+            else:
+                await self._login_page(writer, 200)
+            return
         entry = STATIC.get(request.path)
         if entry is None:
             await respond(writer, 404, "not found")
             return
         name, content_type = entry
+        cache = "public, max-age=604800" if request.path.startswith("/vendor/") else "no-cache"
+        await self._file(writer, name, content_type, cache)
+
+    async def _file(self, writer, name, content_type, cache, csp=None):
         try:
             body = (WEB_ROOT / name).read_bytes()
         except OSError:
             await respond(writer, 404, "not found")
             return
-        cache = "public, max-age=604800" if request.path.startswith("/vendor/") else "no-cache"
         extra = {"Cache-Control": cache}
-        if request.path == "/":
-            extra["Content-Security-Policy"] = CSP
+        if csp is not None:
+            extra["Content-Security-Policy"] = csp
         await respond(writer, 200, body, content_type, extra)
+
+    async def _login_page(self, writer, status, error=False):
+        try:
+            page = (WEB_ROOT / "login.html").read_text(encoding="utf-8")
+        except OSError:
+            await respond(writer, 500, "login page missing")
+            return
+        note = f'<p class="error">{LOGIN_ERROR}</p>' if error else ""
+        extra = {"Content-Security-Policy": CSP_LOGIN, "Cache-Control": "no-store"}
+        await respond(writer, status, page.replace("<!--error-->", note), "text/html; charset=utf-8", extra)
+
+    async def _login(self, request, writer):
+        if not self._same_origin(request):
+            await respond(writer, 403, "cross-origin request rejected")
+            return
+        try:
+            length = int(request.headers.get("content-length", ""))
+        except ValueError:
+            await respond(writer, 411, "缺少 Content-Length")
+            return
+        if length < 0:
+            await respond(writer, 400, "Content-Length 无效")
+            return
+        if length > MAX_FORM:
+            await respond(writer, 413, "表单过长")
+            return
+        try:
+            body = await request.reader.readexactly(length) if length else b""
+        except (asyncio.IncompleteReadError, ConnectionError):
+            return
+        fields = parse_qs(body.decode("utf-8", "replace"), keep_blank_values=True)
+        supplied = (fields.get("password") or [""])[0]
+        if not hmac.compare_digest(supplied.encode(), self.password.encode()):
+            await self._login_page(writer, 401, error=True)
+            return
+        extra = {
+            "Location": "/",
+            "Set-Cookie": self._cookie(request),
+            "Cache-Control": "no-store",
+        }
+        await respond(writer, 303, b"", "text/plain; charset=utf-8", extra)
 
     async def _websocket(self, request, writer):
         if not self._authorized(request):
@@ -201,10 +269,27 @@ class App:
         await json_response(writer, 200, {"name": name, "size": size})
 
     def _authorized(self, request):
-        supplied = request.get("token")
-        if not supplied:
+        return self._valid_cookie(request.cookies.get(COOKIE_NAME))
+
+    def _cookie(self, request):
+        expires = int(time.time()) + SESSION_TTL
+        value = f"{expires}.{self._sign(str(expires))}"
+        # Cloudflare adds cf-visitor at the edge; only then is the session worth marking Secure,
+        # since a plain-HTTP local run would otherwise never receive the cookie back.
+        secure = "; Secure" if "cf-visitor" in request.headers else ""
+        return f"{COOKIE_NAME}={value}; Path=/; HttpOnly; SameSite=Strict{secure}; Max-Age={SESSION_TTL}"
+
+    def _sign(self, text):
+        digest = hmac.new(self.secret, text.encode(), hashlib.sha256).digest()
+        return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
+    def _valid_cookie(self, raw):
+        if not raw or "." not in raw:
             return False
-        return hmac.compare_digest(supplied.encode(), self.token.encode())
+        expires, _, signature = raw.partition(".")
+        if not expires.isdigit() or int(expires) < time.time():
+            return False
+        return hmac.compare_digest(signature, self._sign(expires))
 
     def _same_origin(self, request):
         origin = request.headers.get("origin")

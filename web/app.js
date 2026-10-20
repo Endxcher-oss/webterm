@@ -31,7 +31,6 @@ const CONTROL_KEYS = {
   right: "\x1b[C",
 };
 
-let token = "";
 let ws = null;
 let pendingUpload = null;
 let ctrlArmed = false;
@@ -108,17 +107,6 @@ const term = new Terminal({
 const fit = new FitAddon();
 term.loadAddon(fit);
 term.open(els.term);
-
-function readToken() {
-  const params = new URLSearchParams(location.search);
-  const fromUrl = params.get("token");
-  if (fromUrl) {
-    sessionStorage.setItem("webterm.token", fromUrl);
-    history.replaceState(null, "", location.pathname);
-    return fromUrl;
-  }
-  return sessionStorage.getItem("webterm.token") || "";
-}
 
 function setStatus(text, state) {
   els.status.textContent = text;
@@ -267,10 +255,11 @@ async function attemptReconnect() {
   if (ws && ws.readyState === WebSocket.OPEN) return;
   reconnecting = true;
   try {
-    const response = await fetch(`/ping?token=${encodeURIComponent(token)}`, { cache: "no-store" });
+    const response = await fetch("/ping", { cache: "no-store" });
     if (response.status === 401) {
-      setStatus("token 已失效，请用新链接打开", "bad");
+      setStatus("登录已失效，正在返回登录页…", "bad");
       reconnecting = false;
+      location.replace("/");
       return;
     }
     if (!response.ok) throw new Error("ping failed");
@@ -302,7 +291,7 @@ function connect() {
   term.reset();
   setStatus("连接中…", "wait");
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(`${protocol}//${location.host}/ws?token=${encodeURIComponent(token)}`);
+  ws = new WebSocket(`${protocol}//${location.host}/ws`);
   ws.binaryType = "arraybuffer";
   ws.onopen = () => {
     lastSeen = Date.now();
@@ -333,19 +322,13 @@ function connect() {
 }
 
 async function boot() {
-  token = readToken();
-  if (!token) {
-    setStatus("缺少 token", "bad");
-    term.writeln("地址里没有 token，请从启动 webterm 时打印的链接打开。");
-    return;
-  }
   try {
-    const response = await fetch(`/ping?token=${encodeURIComponent(token)}`, { cache: "no-store" });
-    if (!response.ok) {
-      setStatus("token 无效或已重启", "bad");
-      term.writeln("token 被拒绝，请重启 webterm 并打开新生成的链接。");
+    const response = await fetch("/ping", { cache: "no-store" });
+    if (response.status === 401) {
+      location.replace("/");
       return;
     }
+    if (!response.ok) throw new Error("ping failed");
   } catch {
     setStatus("无法连接服务", "bad");
     return;
@@ -395,7 +378,7 @@ function finishUpload(text, state) {
 
 function postFile(id, file, onProgress) {
   return new Promise((resolve, reject) => {
-    const query = new URLSearchParams({ id, name: file.name, token });
+    const query = new URLSearchParams({ id, name: file.name });
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `/upload?${query}`);
     xhr.responseType = "json";

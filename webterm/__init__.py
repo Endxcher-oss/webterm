@@ -1,1 +1,1 @@
-# webterm package: a token-protected shell over a browser WebSocket.
+# webterm package: a password-protected shell over a browser WebSocket.

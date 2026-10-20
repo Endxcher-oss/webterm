@@ -17,14 +17,16 @@ WebSocket 连接本身不拥有 shell，只“挂”在某个槽位上。断线�
 
 ## 认证
 
-- 启动时 `secrets.token_urlsafe(24)` 生成 token；`--token` 可覆盖，但只在 `--no-tunnel` 下。
-- 校验用 `hmac.compare_digest`，只接受查询参数 `?token=`。
-- 页面首屏是静态资源，不含数据；`/ping` 用于在建立 WebSocket 前判断 token 是否还有效。
-- 前端拿到 token 后写入 `sessionStorage`，并用 `history.replaceState` 把它从地址栏去掉。
-- WebSocket 与 `/upload` 都检查 `Origin`（存在时必须与 `Host` 同源），并拒绝跨源请求。
-
-token 是进程级的，不是会话级的：同一个 token 可以开多个连接，各自得到独立的 shell。
-重启 webterm 即轮换 token；服务端不落盘保存 token。
+- 启动时生成 8 位密码，分两段四位，字符集去掉了 `0/O/1/I/l` 这类易混字符，只打印在终端。
+- 登录页 `POST /login` 提交表单，服务端用 `hmac.compare_digest` 比对；成功后下发
+  `webterm_session` cookie，值是 `<过期时间>.<HMAC-SHA256>`。
+- 签名密钥是进程级随机数（`secrets.token_bytes(32)`，不落盘），所以进程一重启，之前
+  所有 cookie 自动失效，不需要维护吊销列表。
+- cookie 带 `HttpOnly`、`SameSite=Strict`、30 天有效期；只有请求带 `cf-visitor`
+  （说明是 Cloudflare 边缘转发来的）时才加 `Secure`，否则本机 http 访问收不到 cookie。
+- `/ping`、`/ws`、`/upload` 都只认这个 cookie；WebSocket 与 `/upload` 仍检查 `Origin`，
+  跨源请求一律拒绝。
+- 密码是进程级的，不是会话级的：同一个密码可以在多台设备上分别登录，各自拿到独立 cookie。
 
 ## 公网入口
 
@@ -79,7 +81,7 @@ PTY 输出先进入每个连接的发送队列。任一客户端的队列超过 
 3. webterm 找到该槽位最近 attach 的客户端，校验目录，创建请求（`id` 为
    `token_urlsafe(12)`），向它推送 `upload_request`。
 4. 浏览器显示面板。用户选文件后，对每个文件发起
-   `POST /upload?id=...&name=...&token=...`，请求体是文件原始字节，用 XHR 显示进度。
+   `POST /upload?id=...&name=...`，请求体是文件原始字节，用 XHR 显示进度。
 5. 服务端边读边写到 `dest/.webterm-<随机>.part`，完成后 `os.replace` 成目标文件，并把
    `{"type":"file","name","size"}` 追加到控制 socket。
 6. 全部结束后浏览器发 `upload_done`，服务端把 `{"type":"done","dest","files","bytes","errors"}`
@@ -134,17 +136,19 @@ xterm 6 只渲染可视区域，`.xterm-viewport` 的 `scrollHeight` 等于 `cli
 ## 保活
 
 移动端锁屏后 TCP 可能悄无声息地断掉。前端可见时每 20 秒发一次 `ping`，55 秒没收到任何
-消息就主动关闭 WebSocket，再自动重连。重连前先用 `/ping` 校验 token，通过才重新建立
-连接；401 表示 token 已轮换，停止重试并提示。退避间隔从 1 秒翻倍到 10 秒封顶，页面
-回到前台时立即重试一次。后台标签页不参与超时判断，避免定时器被节流后误判。
+消息就主动关闭 WebSocket，再自动重连。重连前先用 `/ping` 校验会话，通过才重新建立
+连接；401 表示 cookie 已失效（多为 webterm 重启过），直接回登录页。退避间隔从 1 秒翻倍
+到 10 秒封顶，页面回到前台时立即重试一次。后台标签页不参与超时判断，避免定时器被节流后
+误判。
 
 ## 已知取舍
 
-- 公网地址随进程变化，token 每次启动重新生成；没有固定域名，也没有凭据持久化。
-- 唯一入口是 Cloudflare 的随机域名，地址一旦泄露就等于暴露 shell，只能靠换 token 和
-  关进程收回。冷启动时新域名要几十秒才在全网解析出来。
+- 公网地址随进程变化，密码每次启动重新生成；没有固定域名，也没有凭据持久化。
+- 唯一入口是 Cloudflare 的随机域名加一个 8 位密码（约 40 bit，只能在线猜，没有限速）。
+  地址和密码同时泄露就等于暴露 shell，只能靠重启进程收回。冷启动时新域名要几十秒才在
+  全网解析出来。
 - 只回放最近 256 KB 输出；更早的内容不会保留。
 - 槽位没有关闭操作，`exit` 之后需要再点一次标签页才重启。
-- 没有多用户、没有会话管理界面；一个进程一个 token，够用为止。
+- 没有多用户、没有会话管理界面；一个进程一个密码，够用为止。
 - 终端查询（DA1、OSC 11 取背景色等）由 xterm.js 自动应答并通过 `onData` 回传，因此
   fish 这类启动时会探测终端的 shell 可以正常工作。
